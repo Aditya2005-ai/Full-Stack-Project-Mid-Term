@@ -22,7 +22,30 @@ export const BuildDetailsPage = () => {
               Back
             </Button>
           </Link>
-          <Button size="sm">
+          <Button
+            size="sm"
+            onClick={async () => {
+              const url = `/api/v1/builds/${id}/download`;
+              try {
+                const token = localStorage.getItem('auth_token');
+                const res = await fetch(url, {
+                  headers: token ? { Authorization: `Bearer ${token}` } : {}
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const blob = await res.blob();
+                const blobUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = blobUrl;
+                a.download = `${id}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(blobUrl);
+              } catch {
+                window.location.href = url;
+              }
+            }}
+          >
             <Download className="w-3.5 h-3.5 mr-1.5" />
             Download ZIP
           </Button>

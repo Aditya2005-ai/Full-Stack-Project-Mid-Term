@@ -41,7 +41,14 @@ export const useBuilderStore = create((set, get) => ({
   // Generation state
   generation: {
     isGenerating: false,
-    step: 0, // 0: idle, 1: preparing, 2: resolving, 3: generating, 4: validating, 5: zipping, 6: complete
+    step: 0,
+    status: 'draft',
+    progress: 0,
+    currentStep: '',
+    message: '',
+    buildId: null,
+    fileCount: 0,
+    zipSize: 0,
     downloadToken: null,
     downloadUrl: null,
     error: null
