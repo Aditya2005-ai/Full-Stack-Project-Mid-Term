@@ -36,6 +36,58 @@ const buildSchema = new mongoose.Schema(
     lastGeneratedAt: {
       type: Date,
       default: null
+    },
+    status: {
+      type: String,
+      enum: [
+        'draft',
+        'queued',
+        'generating',
+        'validating_project',
+        'creating_zip',
+        'validating_zip',
+        'testing_extraction',
+        'testing_project',
+        'completed',
+        'failed'
+      ],
+      default: 'draft'
+    },
+    progress: {
+      type: Number,
+      default: 0
+    },
+    currentStep: {
+      type: String,
+      default: ''
+    },
+    message: {
+      type: String,
+      default: ''
+    },
+    fileCount: {
+      type: Number,
+      default: 0
+    },
+    zipSize: {
+      type: Number,
+      default: 0
+    },
+    zipPath: {
+      type: String,
+      default: ''
+    },
+    downloadToken: {
+      type: String,
+      default: null
+    },
+    error: {
+      type: String,
+      default: null
+    },
+    completedAt: {
+      type: Date,
+      default: null
     }
   },
   {

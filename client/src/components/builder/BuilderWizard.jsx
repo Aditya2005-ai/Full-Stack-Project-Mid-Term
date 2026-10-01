@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Card from '../ui/Card.jsx';
 import Button from '../ui/Button.jsx';
@@ -6,6 +6,23 @@ import Input from '../ui/Input.jsx';
 import Badge from '../ui/Badge.jsx';
 import { useBuilderStore } from '../../store/builderStore.js';
 import { generationService } from '../../services/generationService.js';
+import { buildService } from '../../services/buildService.js';
+
+// Generation Pipeline Stages:
+// 1/5 Preparing configuration
+// 2/5 Resolving dependencies
+// 3/5 Generating full-stack project
+// 4/5 Validating project structure
+// 5/5 Packaging ZIP archive
+const PIPELINE_STEPS = [
+  { id: 'queued', label: '1/5 Preparing configuration & queueing', minProgress: 10 },
+  { id: 'generating', label: '2/5 Resolving dependencies & generating files', minProgress: 20 },
+  { id: 'validating_project', label: '3/5 Generating full-stack project & validating structure', minProgress: 40 },
+  { id: 'creating_zip', label: '4/5 Validating project structure & creating ZIP', minProgress: 60 },
+  { id: 'validating_zip', label: '5/5 Packaging ZIP archive & verifying integrity', minProgress: 70 },
+  { id: 'testing_extraction', label: 'Testing ZIP extraction on disk', minProgress: 80 },
+  { id: 'testing_project', label: 'Client production build & server syntax tested', minProgress: 90 }
+];
 import {
   ShieldCheck,
   ShoppingCart,
@@ -110,53 +127,126 @@ export const BuilderWizard = () => {
     }
   };
 
-  // Generation Pipeline Trigger
+  // Polling ref for async generation tracking
+  const pollingRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+      }
+    };
+  }, []);
+
+  // Generation Pipeline Trigger - Fully Asynchronous Flow
   const handleStartGeneration = async () => {
-    setGenerationState({ isGenerating: true, step: 1, error: null });
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+    }
 
-    setTimeout(() => {
-      setGenerationState({ step: 2 }); // 2. Resolving dependencies
-      setTimeout(() => {
-        setGenerationState({ step: 3 }); // 3. Generating project
-        setTimeout(() => {
-          setGenerationState({ step: 4 }); // 4. Validating project
-          setTimeout(async () => {
-            setGenerationState({ step: 5 }); // 5. Packaging ZIP
-            try {
-              const payload = {
-                name: project.name,
-                currency: project.currency,
-                theme: project.theme,
-                selectedModules,
-                productsConfig,
-                paymentsConfig,
-                reviewsConfig
-              };
-              const res = await generationService.generateProject(payload);
-              const data = res?.data || res;
-              const token = data?.downloadToken || `zip_${Date.now().toString(36)}`;
-              const downloadUrl = data?.downloadUrl || generationService.getDownloadUrl(token);
+    const buildId = project.id || `bld_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 7)}`;
 
-              setGenerationState({
-                step: 6,
-                isGenerating: false,
-                downloadToken: token,
-                downloadUrl
-              });
-            } catch (err) {
-              console.warn('Backend generation fallback to client-side token:', err);
-              const token = `zip_${Date.now().toString(36)}`;
-              setGenerationState({
-                step: 6,
-                isGenerating: false,
-                downloadToken: token,
-                downloadUrl: `/api/v1/download/${token}`
-              });
-            }
-          }, 500);
-        }, 500);
-      }, 500);
-    }, 500);
+    setGenerationState({
+      isGenerating: true,
+      buildId,
+      step: 1,
+      status: 'queued',
+      progress: 5,
+      currentStep: 'Queueing build generation...',
+      message: 'Submitting project configuration...',
+      error: null,
+      downloadToken: null,
+      downloadUrl: null
+    });
+
+    try {
+      const payload = {
+        name: project.name,
+        currency: project.currency,
+        theme: project.theme,
+        selectedModules,
+        productsConfig,
+        paymentsConfig,
+        reviewsConfig
+      };
+
+      // Call asynchronous generation endpoint - returns immediately with { success: true, buildId, status: "queued" }
+      const startRes = await buildService.triggerBuildGeneration(buildId, payload);
+      const data = startRes?.data || startRes;
+
+      if (!data || !data.success) {
+        throw new Error(data?.message || 'Failed to queue project generation');
+      }
+
+      setGenerationState({
+        progress: 10,
+        status: 'queued',
+        currentStep: 'Queued for generation',
+        message: 'Build queued in background'
+      });
+
+      // Poll status every 1200ms
+      pollingRef.current = setInterval(async () => {
+        try {
+          const statusRes = await buildService.getBuildStatus(buildId);
+          const build = statusRes?.data?.build || statusRes?.build || statusRes?.data || statusRes;
+
+          if (!build) return;
+
+          if (build.status === 'completed') {
+            if (pollingRef.current) clearInterval(pollingRef.current);
+            setGenerationState({
+              isGenerating: false,
+              step: 6,
+              status: 'completed',
+              progress: 100,
+              currentStep: 'Generation Complete',
+              message: 'Project assembled, validated, and ready for download',
+              downloadUrl: build.downloadUrl || buildService.getDownloadUrl(buildId),
+              downloadToken: build.downloadToken,
+              fileCount: build.fileCount,
+              zipSize: build.zipSize,
+              error: null
+            });
+          } else if (build.status === 'failed') {
+            if (pollingRef.current) clearInterval(pollingRef.current);
+            setGenerationState({
+              isGenerating: false,
+              step: 0,
+              status: 'failed',
+              progress: 0,
+              currentStep: build.currentStep || 'Verification',
+              message: build.message || 'Generation failed',
+              error: build.error || 'The build pipeline encountered an error during verification.',
+              downloadUrl: null,
+              downloadToken: null
+            });
+          } else {
+            // Still in progress - update live progress & current step
+            setGenerationState({
+              status: build.status,
+              progress: build.progress || 20,
+              currentStep: build.currentStep || 'Processing...',
+              message: build.message || 'Synthesizing runnable MERN code'
+            });
+          }
+        } catch (pollErr) {
+          console.warn('[Builder] Status poll error:', pollErr);
+        }
+      }, 1200);
+
+    } catch (err) {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      console.error('Generation Pipeline Error:', err);
+      setGenerationState({
+        step: 0,
+        isGenerating: false,
+        status: 'failed',
+        error: err.message || 'Could not queue build generation. Please try again.',
+        downloadToken: null,
+        downloadUrl: null
+      });
+    }
   };
 
   const handleCopyReadme = () => {
@@ -165,6 +255,32 @@ export const BuilderWizard = () => {
     );
     setCopiedReadme(true);
     setTimeout(() => setCopiedReadme(false), 2000);
+  };
+
+  const handleDownloadZip = async (e) => {
+    e?.preventDefault();
+    const buildId = generation.buildId || project.id || 'store';
+    const filename = `${project.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}.zip`;
+    const targetUrl = generation.downloadUrl || (generation.downloadToken ? `/api/v1/download/${generation.downloadToken}` : `/api/v1/builds/${buildId}/download`);
+
+    try {
+      const authToken = localStorage.getItem('auth_token');
+      const res = await fetch(targetUrl, {
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {}
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch {
+      window.location.href = targetUrl;
+    }
   };
 
   return (
@@ -813,26 +929,90 @@ export const BuilderWizard = () => {
 
           <div className="p-6 rounded-[6px] border border-border bg-white shadow-card space-y-5 text-center">
             {generation.isGenerating ? (
-              <div className="space-y-4 py-4">
-                <div className="w-10 h-10 rounded-full border-2 border-border border-t-ink animate-spin mx-auto" />
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold text-ink font-mono">
-                    {generation.step === 1 && '1/5 Preparing configuration...'}
-                    {generation.step === 2 && '2/5 Resolving dependencies...'}
-                    {generation.step === 3 && '3/5 Generating full-stack project...'}
-                    {generation.step === 4 && '4/5 Validating project structure...'}
-                    {generation.step === 5 && '5/5 Packaging ZIP archive...'}
-                  </p>
-                  <p className="text-[11px] text-ink-muted">Synthesizing runnable MERN code</p>
+              <div className="space-y-5 py-4">
+                <div className="text-center space-y-1">
+                  <div className="w-10 h-10 rounded-full border-2 border-border border-t-ink animate-spin mx-auto mb-3" />
+                  <h3 className="text-sm font-semibold text-ink">Generation in Progress</h3>
+                  <p className="text-xs text-ink-muted">{generation.message || 'Synthesizing runnable MERN code'}</p>
                 </div>
-                <div className="w-full bg-canvas-inset rounded-full h-1.5 overflow-hidden">
-                  <div
-                    className="bg-ink h-full transition-all duration-300"
-                    style={{ width: `${generation.step * 20}%` }}
-                  />
+
+                {/* Progress Bar & Percentage */}
+                <div className="space-y-1.5 max-w-md mx-auto">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-medium text-ink truncate pr-2">
+                      {generation.currentStep || 'Processing...'}
+                    </span>
+                    <span className="font-mono font-semibold text-ink">{generation.progress || 0}%</span>
+                  </div>
+                  <div className="w-full bg-canvas-inset rounded-full h-2 overflow-hidden border border-border">
+                    <div
+                      className="bg-ink h-full transition-all duration-300 ease-out"
+                      style={{ width: `${Math.max(5, generation.progress || 0)}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Notion-style Real Step Checklist */}
+                <div className="max-w-md mx-auto pt-3 border-t border-border space-y-2 text-left text-xs font-mono">
+                  {PIPELINE_STEPS.map((s) => {
+                    const isDone = (generation.progress || 0) > s.minProgress || generation.status === 'completed';
+                    const isCurrent =
+                      generation.status === s.id ||
+                      (!isDone && (generation.progress || 0) >= s.minProgress - 15);
+
+                    return (
+                      <div
+                        key={s.id}
+                        className={`flex items-center space-x-2.5 transition-colors ${
+                          isDone
+                            ? 'text-green-700 font-medium'
+                            : isCurrent
+                            ? 'text-ink font-semibold'
+                            : 'text-ink-muted opacity-60'
+                        }`}
+                      >
+                        <span className="w-4 text-center">
+                          {isDone ? (
+                            '✓'
+                          ) : isCurrent ? (
+                            <span className="inline-block w-2 h-2 rounded-full bg-ink animate-pulse" />
+                          ) : (
+                            '○'
+                          )}
+                        </span>
+                        <span>{s.label}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-            ) : generation.step === 6 ? (
+            ) : generation.status === 'failed' || generation.error ? (
+              <div className="space-y-4 py-2">
+                <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto border border-red-200">
+                  <X className="w-6 h-6" />
+                </div>
+                <div className="space-y-1.5 text-center">
+                  <h3 className="text-base font-bold text-red-700">Generation Failed</h3>
+                  {generation.currentStep && (
+                    <div className="text-xs font-medium text-red-800">
+                      Step: <span className="font-mono">{generation.currentStep}</span>
+                    </div>
+                  )}
+                  <div className="p-3 bg-red-50 border border-red-200 rounded text-xs text-red-700 font-mono text-left max-w-md mx-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
+                    {generation.error || 'The build pipeline encountered an error during verification.'}
+                  </div>
+                </div>
+
+                <Button
+                  size="lg"
+                  onClick={handleStartGeneration}
+                  className="w-full bg-ink hover:bg-black text-white font-medium text-xs shadow-subtle"
+                >
+                  Retry Generation
+                  <ArrowRight className="w-4 h-4 ml-1.5" />
+                </Button>
+              </div>
+            ) : generation.status === 'completed' || generation.step === 6 ? (
               <div className="space-y-4 py-2">
                 <div className="w-10 h-10 rounded-full bg-success-light text-success flex items-center justify-center mx-auto border border-success-border">
                   <CheckCircle2 className="w-6 h-6" />
@@ -840,23 +1020,24 @@ export const BuilderWizard = () => {
                 <div className="space-y-1">
                   <h3 className="text-base font-bold text-ink">Generation Complete</h3>
                   <p className="text-xs text-ink-muted">
-                    Your complete MERN e-commerce project has been assembled and packaged into a ZIP archive.
+                    Your complete MERN e-commerce project has been assembled, validated, and packaged into a ZIP archive.
                   </p>
+                  {generation.fileCount > 0 && (
+                    <p className="text-[11px] font-mono text-ink-muted">
+                      {generation.fileCount} source files &bull; {(generation.zipSize / 1024).toFixed(1)} KB
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex flex-col gap-2.5 pt-2">
-                  <a
-                    href={generation.downloadUrl || `/api/v1/download/${generation.downloadToken || 'store'}`}
-                    download={`${project.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}.zip`}
+                  <Button
+                    size="lg"
+                    onClick={handleDownloadZip}
+                    className="w-full bg-ink hover:bg-black text-white font-medium text-xs shadow-subtle"
                   >
-                    <Button
-                      size="lg"
-                      className="w-full bg-ink hover:bg-black text-white font-medium text-xs shadow-subtle"
-                    >
-                      <Download className="w-4 h-4 mr-2" />
-                      Download {project.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}.zip
-                    </Button>
-                  </a>
+                    <Download className="w-4 h-4 mr-2" />
+                    Download {project.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}.zip
+                  </Button>
 
                   <Button
                     variant="outline"
@@ -899,7 +1080,8 @@ export const BuilderWizard = () => {
                 <Button
                   size="lg"
                   onClick={handleStartGeneration}
-                  className="w-full bg-ink hover:bg-black text-white font-medium text-xs shadow-subtle"
+                  disabled={generation.isGenerating}
+                  className="w-full bg-ink hover:bg-black text-white font-medium text-xs shadow-subtle disabled:opacity-50"
                 >
                   Start Project Generation
                   <ArrowRight className="w-4 h-4 ml-1.5" />

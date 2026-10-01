@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import PageContainer from '../components/layout/PageContainer.jsx';
 import Card from '../components/ui/Card.jsx';
 import Button from '../components/ui/Button.jsx';
 import Badge from '../components/ui/Badge.jsx';
 import { useBuilderStore } from '../store/builderStore.js';
+import { generationService } from '../services/generationService.js';
+import { buildService } from '../services/buildService.js';
 import {
   FileCode,
   Folder,
@@ -101,21 +103,66 @@ export const ReviewPage = () => {
     });
   }, [selectedModules]);
 
-  const handleStartGeneration = () => {
+  const [downloadToken, setDownloadToken] = useState(null);
+  const [downloadUrl, setDownloadUrl] = useState(null);
+  const pollingRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, []);
+
+  const handleStartGeneration = async () => {
+    if (pollingRef.current) clearInterval(pollingRef.current);
+
     setIsGenerating(true);
     setProgressStep(1);
 
-    setTimeout(() => {
-      setProgressStep(2); // Rendering
-      setTimeout(() => {
-        setProgressStep(3); // Zipping
-        setTimeout(() => {
-          setProgressStep(4); // Ready
-          setIsGenerating(false);
-          setIsReady(true);
-        }, 600);
-      }, 600);
-    }, 600);
+    const buildId = project.id || `bld_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 7)}`;
+
+    try {
+      await buildService.triggerBuildGeneration(buildId, {
+        name: project.name || 'Bloom Boutique',
+        currency: project.currency || 'INR',
+        theme: project.theme || '#2383E2',
+        selectedModules
+      });
+
+      // Poll status every 1200ms
+      pollingRef.current = setInterval(async () => {
+        try {
+          const statusRes = await buildService.getBuildStatus(buildId);
+          const build = statusRes?.data?.build || statusRes?.build || statusRes?.data;
+          if (!build) return;
+
+          if (build.status === 'generating') setProgressStep(2);
+          if (build.status === 'validating_project' || build.status === 'creating_zip') setProgressStep(3);
+
+          if (build.status === 'completed') {
+            if (pollingRef.current) clearInterval(pollingRef.current);
+            setDownloadToken(build.downloadToken);
+            setDownloadUrl(build.downloadUrl || buildService.getDownloadUrl(buildId));
+            setProgressStep(4);
+            setIsGenerating(false);
+            setIsReady(true);
+          } else if (build.status === 'failed') {
+            if (pollingRef.current) clearInterval(pollingRef.current);
+            setIsGenerating(false);
+            setIsReady(false);
+            alert(`Generation failed: ${build.error || 'Verification error'}`);
+          }
+        } catch (pollErr) {
+          console.warn('[ReviewPage] Poll error:', pollErr);
+        }
+      }, 1200);
+    } catch (err) {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      console.error('Generation Error:', err);
+      setIsGenerating(false);
+      setIsReady(false);
+      alert('Generation failed: ' + (err.message || 'Unknown error'));
+    }
   };
 
   const handleCopyReadme = () => {
@@ -197,8 +244,27 @@ export const ReviewPage = () => {
                   <Button
                     size="md"
                     className="w-full bg-accent hover:bg-accent-hover text-surface-950 font-bold shadow-lg"
-                    onClick={() => {
-                      window.location.href = '/api/v1/download/demo-token';
+                    onClick={async () => {
+                      const url = downloadUrl || `/api/v1/download/${downloadToken || 'store'}`;
+                      const filename = `${(project.name || 'ecommerce-store').toLowerCase().replace(/[^a-z0-9]/g, '-')}.zip`;
+                      try {
+                        const token = localStorage.getItem('auth_token');
+                        const res = await fetch(url, {
+                          headers: token ? { Authorization: `Bearer ${token}` } : {}
+                        });
+                        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                        const blob = await res.blob();
+                        const blobUrl = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = blobUrl;
+                        a.download = filename;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        window.URL.revokeObjectURL(blobUrl);
+                      } catch {
+                        window.location.href = url;
+                      }
                     }}
                   >
                     <Download className="w-4 h-4 mr-2" />

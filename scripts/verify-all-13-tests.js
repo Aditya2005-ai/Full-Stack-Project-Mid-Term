@@ -241,7 +241,7 @@ const server = app.listen(0, async () => {
     assert(clientAppContent.includes('Lehengas') && clientAppContent.includes('Kurtis'), 'Custom categories not injected into client App.jsx');
 
     // Verify node_modules and .git do NOT exist in file map
-    const hasForbiddenFiles = Object.keys(files).some(f => f.includes('node_modules') || f.includes('.git'));
+    const hasForbiddenFiles = Object.keys(files).some(f => f.includes('node_modules') || (f.includes('.git') && !f.includes('.gitignore')));
     assert(!hasForbiddenFiles, 'Generated project contains forbidden node_modules or .git');
     console.log(`   ✅ Complete MERN codebase verified across ${Object.keys(files).length} files with custom categories injected.`);
     passedTests++;

@@ -1,11 +1,18 @@
 /**
  * Generated Output Validator Interface
- * Phase 01: Architectural interface skeleton
+ * Conforms to Problem Statement 06 & Phase 11-17, Phase 46
  */
+
+export { validateGeneratedProject } from './projectValidator.js';
+export { validateZipArchive } from './zipValidator.js';
+export { testZipExtraction } from './extractionValidator.js';
+export { testClientBuild } from './clientBuildValidator.js';
+export { testServerValidation } from './serverValidator.js';
+export { validateBuildArtifact } from './buildArtifactValidator.js';
 
 export class OutputValidator {
   /**
-   * Validates generated file tree integrity
+   * Validates in-memory generated file tree integrity (backward compatibility)
    * @param {Record<string, string>} files 
    * @returns {{ isValid: boolean, errors: string[] }}
    */

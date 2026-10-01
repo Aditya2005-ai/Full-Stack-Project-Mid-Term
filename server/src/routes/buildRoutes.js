@@ -1,7 +1,7 @@
 /**
  * Build Routes
  * Owned by Developer 4
- * Conforms to Problem Statement 06 (Page 8-9)
+ * Conforms to Problem Statement 06 & Phase 18
  */
 
 import { Router } from 'express';
@@ -17,6 +17,9 @@ router.get('/mine', protect, buildController.getUserBuilds);
 router.post('/resolve', protect, buildController.resolveBuild);
 
 router.get('/:id', protect, buildController.getBuildById);
+router.post('/:id/generate', protect, buildController.triggerBuildGeneration);
+router.get('/:id/status', protect, buildController.getBuildStatus);
+router.get('/:id/download', protect, buildController.downloadBuildZip);
 router.patch('/:id', protect, buildController.updateBuild);
 router.put('/:id', protect, buildController.updateBuild);
 router.delete('/:id', protect, buildController.deleteBuild);
