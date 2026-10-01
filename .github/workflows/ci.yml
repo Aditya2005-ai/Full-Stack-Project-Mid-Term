@@ -1,0 +1,37 @@
+name: CI Foundation Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  verify-foundation:
+    name: Verify System Foundation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify Generator Engine Test
+        run: |
+          node generator/tests/generator.test.js
+
+      - name: Install & Test Server
+        run: |
+          cd server
+          npm ci || npm install
+          npm test
+
+      - name: Install & Build Client
+        run: |
+          cd client
+          npm ci || npm install
+          npm run build

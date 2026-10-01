@@ -1,0 +1,25 @@
+{
+  "name": "autonomous-mern-ecommerce-code-generator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Autonomous MERN E-Commerce Code Generator - Foundation Phase 01",
+  "type": "module",
+  "scripts": {
+    "install:all": "npm install --prefix client && npm install --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "dev:server": "npm run dev --prefix server",
+    "build:client": "npm run build --prefix client",
+    "test": "npm run test:server && npm run test:generator",
+    "test:server": "npm test --prefix server",
+    "test:generator": "node generator/tests/generator.test.js",
+    "verify": "node scripts/verify-foundation.js"
+  },
+  "keywords": [
+    "mern",
+    "ecommerce",
+    "code-generator",
+    "developer-tooling"
+  ],
+  "author": "Engineering Team",
+  "license": "MIT"
+}

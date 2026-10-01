@@ -1,0 +1,30 @@
+{
+  "name": "@generator/server",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Express Backend API for Autonomous MERN E-Commerce Code Generator",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "node src/server.js",
+    "start": "node src/server.js",
+    "test": "node tests/health.test.js"
+  },
+  "dependencies": {
+    "archiver": "^8.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mongoose": "^8.9.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  },
+  "keywords": [
+    "express",
+    "mongoose",
+    "mern",
+    "backend"
+  ],
+  "author": "Backend Engineering Team (Dev 3 & Dev 4)",
+  "license": "MIT"
+}
