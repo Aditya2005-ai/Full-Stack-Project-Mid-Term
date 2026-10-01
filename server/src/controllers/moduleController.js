@@ -1,8 +1,3 @@
-/**
- * Module Controller
- * Owned by Developer 4
- */
-
 import { moduleService } from '../services/moduleService.js';
 import { ApiResponse } from '../utils/apiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';

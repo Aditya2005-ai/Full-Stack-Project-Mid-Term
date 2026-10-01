@@ -5,8 +5,6 @@
  */
 
 import { createRequire } from 'module';
-import fs from 'fs';
-import path from 'path';
 import { PassThrough } from 'stream';
 
 const require = createRequire(import.meta.url);
@@ -25,84 +23,60 @@ function createZipArchive(options = { zlib: { level: 9 } }) {
   throw new Error('Unsupported archiver module structure');
 }
 
+function sanitizeProjectName(projectName) {
+  return (projectName || 'mern-ecommerce')
+    .toLowerCase()
+    .replace(/[^a-z0-9-_]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '') || 'mern-ecommerce';
+}
+
 export class ZipPackager {
   /**
-   * Packages project directory from disk into a ZIP archive on disk
-   * @param {string} projectDir - Path to generated project folder on disk
-   * @param {string} zipOutputPath - Destination path for .zip file
-   * @param {string} rootFolderName - Root folder name inside archive (e.g. 'bloom-boutique')
-   * @returns {Promise<{ zipPath: string, filename: string, size: number, buffer: Buffer }>}
-   */
-  async packageDirectory(projectDir, zipOutputPath, rootFolderName = 'mern-ecommerce') {
-    await fs.promises.mkdir(path.dirname(zipOutputPath), { recursive: true });
-
-    return new Promise((resolve, reject) => {
-      const output = fs.createWriteStream(zipOutputPath);
-      const archive = createZipArchive({ zlib: { level: 9 } });
-
-      let closed = false;
-
-      output.on('close', async () => {
-        closed = true;
-        try {
-          const stats = await fs.promises.stat(zipOutputPath);
-          const buffer = await fs.promises.readFile(zipOutputPath);
-          resolve({
-            zipPath: zipOutputPath,
-            filename: path.basename(zipOutputPath),
-            size: stats.size,
-            buffer
-          });
-        } catch (err) {
-          reject(err);
-        }
-      });
-
-      output.on('error', (err) => reject(err));
-      archive.on('error', (err) => reject(err));
-
-      archive.pipe(output);
-
-      // Add entire projectDir contents under rootFolderName/
-      // archiver automatically uses forward slashes '/' ensuring Windows Explorer compatibility
-      archive.directory(projectDir, rootFolderName);
-
-      archive.finalize();
-    });
-  }
-
-  /**
-   * Packages file tree into a buffer (backward compatibility)
+   * Packages file tree into a buffer
    * @param {Record<string, string>} files 
    * @param {string} projectName 
    * @returns {Promise<{ filename: string, size: number, buffer: Buffer }>}
    */
-  async package(files, projectName = 'mern-ecommerce') {
-    return new Promise((resolve, reject) => {
-      const archive = createZipArchive({ zlib: { level: 9 } });
-      const buffers = [];
-      const passThrough = new PassThrough();
+  async package(files, projectName = 'mern-ecommerce', options = {}) {
+    const safeProjectName = sanitizeProjectName(projectName);
+    const outputDir = options.outputDir || await fs.mkdtemp(path.join(tmpdir(), 'mern-zip-'));
+    await fs.mkdir(outputDir, { recursive: true });
 
-      passThrough.on('data', (chunk) => buffers.push(chunk));
-      passThrough.on('end', () => {
-        const buffer = Buffer.concat(buffers);
-        resolve({
-          filename: `${projectName}.zip`,
-          size: buffer.length,
-          buffer
-        });
+    const filename = `${safeProjectName}.zip`;
+    const filePath = path.join(outputDir, filename);
+
+    const archive = createZipArchive({ zlib: { level: 9 } });
+    const output = createWriteStream(filePath);
+
+    await new Promise((resolve, reject) => {
+      output.on('close', resolve);
+      output.on('error', reject);
+      archive.on('warning', (err) => {
+        if (err.code === 'ENOENT') {
+          console.warn('ZIP packager warning:', err.message);
+          return;
+        }
+        reject(err);
       });
-      archive.on('error', (err) => reject(err));
+      archive.on('error', reject);
 
-      archive.pipe(passThrough);
+      archive.pipe(output);
 
       for (const [filePath, content] of Object.entries(files)) {
-        // Normalize slashes to forward slashes for Windows Explorer compatibility
-        const normalizedName = `${projectName}/${filePath.replace(/\\/g, '/')}`;
-        archive.append(content, { name: normalizedName });
+        archive.append(content, { name: filePath });
       }
 
       archive.finalize();
     });
+
+    const stats = await fs.stat(filePath);
+
+    return {
+      filename,
+      size: stats.size,
+      filePath,
+      outputDir
+    };
   }
 }
