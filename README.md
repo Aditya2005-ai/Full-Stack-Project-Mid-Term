@@ -9,7 +9,7 @@
 
 | Name | Roll No. | GitHub | Primary responsibility |
 |---|---|---|---|
-| Developer 1 | FS-2026-01 | @dev1-lead | Frontend Core & Notion Design System (`client/src/components/ui/`, `layout/`, `pages/`) |
+| Developer 1 | FS-2026-01 | @dev1-lead | Frontend Core & Design System (`client/src/components/ui/`, `layout/`, `pages/`) |
 | Developer 2 | FS-2026-02 | @dev2-builder | Frontend Builder Wizard & State (`client/src/components/builder/`, `store/`) |
 | Developer 3 | FS-2026-03 | @dev3-auth | Backend Auth & DB Architecture (`server/src/config/`, `models/User.js`, JWT) |
 | Developer 4 | FS-2026-04 | @dev4-api | Backend APIs & Build Management (`server/src/models/`, `controllers/`, routes) |
@@ -21,7 +21,6 @@
 - **Frontend App:** http://localhost:5173
 - **Backend API:** http://localhost:5000/api/v1
 - **Health Endpoint:** http://localhost:5000/api/v1/health (and `/api/health`)
-- **Demo Video:** https://drive.google.com/ (3-5 min walkthrough link placeholder)
 
 ---
 
