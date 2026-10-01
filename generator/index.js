@@ -34,7 +34,7 @@ export class GeneratorEngine {
 
   /**
    * Resolves module dependencies
-   * @param {string[]} moduleIds 
+   * @param {string[]} moduleIds
    * @param {Object} options
    */
   resolveDependencies(moduleIds, options = {}) {
@@ -43,14 +43,16 @@ export class GeneratorEngine {
 
   /**
    * Generates project files based on configuration
-   * @param {Object} projectConfig 
+   * @param {Object} projectConfig
    */
   async generate(projectConfig = {}) {
     const files = generateMernStoreFiles(projectConfig);
     const projectName = (projectConfig.name || projectConfig.store?.name || 'ecommerce-store')
       .toLowerCase()
       .replace(/[^a-z0-9]/g, '-');
-    const zipResult = await this.packager.package(files, projectName);
+    const zipResult = await this.packager.package(files, projectName, {
+      outputDir: projectConfig.outputDir
+    });
 
     return {
       success: true,
@@ -67,7 +69,7 @@ export class GeneratorEngine {
 
   /**
    * Validates generated file tree
-   * @param {Record<string, string>} files 
+   * @param {Record<string, string>} files
    */
   validate(files) {
     return OutputValidator.validate(files);
@@ -75,11 +77,12 @@ export class GeneratorEngine {
 
   /**
    * Packages project into downloadable ZIP
-   * @param {Record<string, string>} files 
-   * @param {string} projectName 
+   * @param {Record<string, string>} files
+   * @param {string} projectName
+   * @param {Object} options
    */
-  async packageZip(files, projectName) {
-    return this.packager.package(files, projectName);
+  async packageZip(files, projectName, options = {}) {
+    return this.packager.package(files, projectName, options);
   }
 }
 
