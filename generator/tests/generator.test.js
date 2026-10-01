@@ -3,6 +3,7 @@
  */
 
 import { GeneratorEngine, createGenerator } from '../index.js';
+import fs from 'fs/promises';
 
 console.log('🧪 Testing Generator Engine initialization...');
 
@@ -40,8 +41,14 @@ try {
     throw new Error(`Insufficient files generated: ${Object.keys(genResult.files).length}`);
   }
 
-  if (!genResult.zip || !genResult.zip.buffer || genResult.zip.size === 0) {
+  if (!genResult.zip || genResult.zip.size === 0) {
     throw new Error('ZIP packaging failed or produced empty buffer');
+  }
+
+  if (genResult.zip.filePath) {
+    await fs.access(genResult.zip.filePath);
+  } else if (!genResult.zip.buffer) {
+    throw new Error('ZIP packaging output is missing both filePath and buffer');
   }
 
   console.log(`✅ Generated ${Object.keys(genResult.files).length} files, packaged into ${genResult.zip.size} bytes ZIP.`);
@@ -50,4 +57,3 @@ try {
   console.error('❌ Generator Engine test failed:', error);
   process.exit(1);
 }
-

@@ -22,6 +22,7 @@ jobs:
 
       - name: Verify Generator Engine Test
         run: |
+          npm ci --prefix generator || npm install --prefix generator
           node generator/tests/generator.test.js
 
       - name: Install & Test Server
