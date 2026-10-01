@@ -21,6 +21,7 @@
 - **Frontend App:** http://localhost:5173
 - **Backend API:** http://localhost:5000/api/v1
 - **Health Endpoint:** http://localhost:5000/api/v1/health (and `/api/health`)
+- DEMO VIDEO LINK: https://drive.google.com/file/d/19qAo771ST2DoDs00R_383ZYeDGxeqfnu/view?usp=sharing
 
 ---
 
